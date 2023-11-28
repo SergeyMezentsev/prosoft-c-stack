@@ -16,7 +16,8 @@ void stack_free(const hstack_t hstack)
 int stack_valid_handler(const hstack_t hstack)
 {
     UNUSED(hstack);
-    return 1;
+    //return 1;
+	return -100; // My first idiot commit
 }
 
 unsigned int stack_size(const hstack_t hstack)
