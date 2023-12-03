@@ -77,6 +77,7 @@ void stack_free(const hstack_t hstack)
 
 int stack_valid_handler(const hstack_t hstack)
 {
+
     struct stack_head* temp = &head;
 
     //Find needed stack and return 0 if it's found
