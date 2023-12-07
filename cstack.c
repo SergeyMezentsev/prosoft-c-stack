@@ -2,8 +2,25 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 
+struct node {
+    struct node* prev;
+    unsigned int data_size;
+    void* p_data;
+};
+
+struct stack_head {
+    hstack_t id;
+    struct stack_head* next_head;
+    unsigned int stack_size;
+    struct node* p_node;
+};
+
+
+//This is the start-struct for the single-linked list
+//of the structs that are beginnings of the stacks
 struct stack_head head = {0, NULL, 0, NULL};
 
 
@@ -14,177 +31,205 @@ hstack_t stack_new(void)
     static hstack_t current_id = 0;
 
     //Allocate mem for the new stack head
-    struct stack_head* temp = head.p_prev;
-    head.p_prev = malloc(sizeof(struct stack_head));
+    struct stack_head* temp_head = (struct stack_head*) malloc(sizeof(struct stack_head));
 
-    //Initialize all fields of the new stack head
-    head.p_prev->id = ++current_id;
-    head.p_prev->p_prev = temp;
-    head.p_prev->stack_size = 0;
-    head.p_prev->p_node = NULL;
-    
+    // If malloc() returned NULL, so return -1
+    if (temp_head == NULL)
+        return -1;
+
+    //Initialize all fields of the new head
+    temp_head->id = ++current_id;
+    temp_head->next_head = head.next_head;
+    temp_head->stack_size = 0u;
+    temp_head->p_node = NULL;
+
+
+    //Link new structure with single-linked list of the heads
+    head.next_head = temp_head;
+
     return current_id;
+}
+
+
+// If id is incorrect or stack with the id doesn't exist
+// the function returns NULL
+// otherwise it returns pointer to the stack_head with the id
+struct stack_head* find_stack_head(hstack_t id) {
+
+    //Incorrect id
+    if (id <= 0)
+        return NULL;
+
+    struct stack_head* temp_head = &head;
+
+    while (1) {
+
+        if (temp_head->id == id) {
+            return temp_head;
+        }
+
+        // It works because last head has "next_head = NULL"
+        if (temp_head->next_head == NULL) {
+            return NULL;
+        }
+
+        temp_head = temp_head->next_head;
+    }
+}
+
+// Recursive function that allows to delete all nodes of the stack
+// also it deletes all allocated data memory areas in nodes
+void delete_nodes(struct node* current_node) {
+    
+    if (current_node == NULL) {
+        return;
+    }
+    else {
+        delete_nodes(current_node->prev);
+        free(current_node->p_data);
+        free(current_node);
+    }
 }
 
 
 void stack_free(const hstack_t hstack)
 {
-    struct stack_head* temp = &head;
-    struct stack_head* head_before_temp = NULL;
-    unsigned char found = 0u;
+    struct stack_head* prev_temp_head = &head;
+    struct stack_head* temp_head = NULL;
+    
 
-    // Finding needed stack
-    while (temp->p_prev != NULL) {
-        head_before_temp = temp;
-        temp = temp->p_prev;
+    // If there are no stacks
+    if (prev_temp_head->next_head == NULL)
+        return;
+    else
+        temp_head = prev_temp_head->next_head;
 
-        if (temp->id == hstack) {
-            found = 1u;
+    // Try to find needed stack
+    bool stack_found = false;
+
+    while (1) {
+
+        if (temp_head->id == hstack) {
+            stack_found = true;
+            break;
+        }
+
+        if (temp_head->next_head != NULL) {
+            prev_temp_head = temp_head;
+            temp_head = temp_head->next_head;
+        } else {
             break;
         }
     }
 
-    // If the stack hasn't been found, do nothing
-    if (found == 0u)
+    // Delete all nodes if the stack was found
+    if (stack_found) {
+        delete_nodes(temp_head->p_node);
+    } else {
         return;
-
-    // If the stack is empty, do nothing
-    if (temp->stack_size == 0u)
-        return;
-
-    // Delete the relation between needed stack and stack that had a pointer to this stack
-    head_before_temp->p_prev = temp->p_prev;
-
-
-    //Delete all nodes that were in this stack
-    struct node* temp_node = temp->p_node;
-    struct node* prev_temp_node = temp_node->prev;
-    free(temp);
-
-    while (prev_temp_node != NULL) {
-        free(temp_node->p_data);
-        free(temp_node);
-        temp_node = prev_temp_node;
-        prev_temp_node = temp_node->prev;
-
     }
 
-    //Delete the last  node
-    free(temp_node->p_data);
-    free(temp_node); 
+    // Delete the head of the stack itself
+    // and link the both parts of the single-linked list together
+    prev_temp_head->next_head = temp_head->next_head;
+    free(temp_head);
 }
 
 
 int stack_valid_handler(const hstack_t hstack)
 {
-
-    struct stack_head* temp = &head;
-
-    //Find needed stack and return 0 if it's found
-    while (temp->p_prev != NULL) {
-        temp = temp->p_prev;
-
-        if (temp->id == hstack)
-            return 0;
-    }
-    
-    return 1;
+    if (find_stack_head(hstack) != NULL)
+        return 0;
+    else
+        return 1;
 }
 
 
 unsigned int stack_size(const hstack_t hstack)
 {
-    struct stack_head* temp = &head;
-
-    //Find needed stack and return its size
-    while (temp->p_prev != NULL) {
-        temp = temp->p_prev;
-
-        if (temp->id == hstack)
-            return temp->stack_size;
-    }
-
-    return 0u;
+    struct stack_head* temp_head;
+    if ( (temp_head = find_stack_head(hstack)) != NULL)
+        return temp_head->stack_size;
+    else
+        return 0u;
 }
 
 
 void stack_push(const hstack_t hstack, const void* data_in, const unsigned int size)
 {
-    struct stack_head* temp = &head;
-    unsigned char found = 0u;
-
-    // Finding needed stack
-    while (temp->p_prev != NULL) {
-        temp = temp->p_prev;
-
-        if (temp->id == hstack) {
-            found = 1u;
-            break;
-        }
-    }
-
-    // If the stack hasn't been found, do nothing
-    if (found == 0u)
+    // Check if arguments are valid
+    if (data_in == NULL)
         return;
 
-    // If the stack is found, allocate mem for new node
-    // and set all fields of the new node
-    ++(temp->stack_size);
+    if (size == 0u)
+        return;
 
-    struct node* temp_node = temp->p_node;
-    temp->p_node = malloc(sizeof(struct node));
+    struct stack_head* temp_head = find_stack_head(hstack);
+    if (temp_head == NULL)
+        return;
 
-    temp->p_node->prev = temp_node;
-    temp->p_node->data_size = size;
-    temp->p_node->p_data = malloc(sizeof(size));
-    memcpy(temp->p_node->p_data, data_in, size);
+
+    // Create new node for new data
+    struct node* new_node = malloc(sizeof(struct node));
+    if (new_node == NULL)
+        return;
+
+    //Try to allocate memory for the new data in new node
+    new_node->p_data = malloc(size);
+    if (new_node->p_data == NULL) {
+        free(new_node);
+        return;
+    }
+
+    //Allocate other fields of the new node
+    new_node->data_size = size;
+    new_node->prev = temp_head->p_node;
+    
+    //Copy data
+    memcpy(new_node->p_data, data_in, size);
+    
+    //Link new node with the stack
+    temp_head->p_node = new_node;
+    ++(temp_head->stack_size);
 }
 
 
 unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int size)
 {
-    struct stack_head* temp = &head;
-    unsigned char found = 0u;
-
-    // Finding needed stack
-    while (temp->p_prev != NULL) {
-        temp = temp->p_prev;
-
-        if (temp->id == hstack) {
-            found = 1u;
-            break;
-        }
-    }
-
-    // If the stack hasn't been found, do nothing
-    if (found == 0u)
+    // Check if arguments are valid
+    if (data_out == NULL)
         return 0u;
 
-    // If the stack is empty, do nothing
-    if (temp->stack_size == 0u)
+    if (size == 0u)
         return 0u;
 
+    struct stack_head* temp_head = find_stack_head(hstack);
+    if (temp_head == NULL)
+        return 0u;
 
-    // If the stack has at least one field
-    // Delete and put data from the field to the buffer
-    struct node* temp_node = temp->p_node;
-    temp->p_node = temp_node->prev;
-    --(temp->stack_size);
+    //Fetch needed node
+    struct node* upper_node = temp_head->p_node;
+    if (upper_node == NULL)
+        return 0u;
 
-    //We set the buffer according to comparison of its size and size of the data
-    if (temp_node->data_size <= size) {
-        unsigned int copied_size = temp_node->data_size;
+    // If the buffer's capacity is less than the data-size in the node
+    if (size < upper_node->data_size)
+        return 0u;
 
-        memcpy(data_out, temp_node->p_data, copied_size);
-        free(temp_node->p_data);
-        free(temp_node);
+    //Copy the data from node to the outer buffer
+    memcpy(data_out, upper_node->p_data, upper_node->data_size);
+    
+    //Link previous node with the stack-head-structure
+    //making the node the upper one
+    temp_head->p_node = upper_node->prev;
+    --(temp_head->stack_size);
 
-        return copied_size;
-    } else {
-        memcpy(data_out, temp_node->p_data, size);
-        free(temp_node->p_data);
-        free(temp_node);
-        return size;
-    }
+
+    //Delete the upper_node
+    unsigned int copied_size = upper_node->data_size;
+    free(upper_node->p_data);
+    free(upper_node);
+
+    return copied_size;
 }
 
